@@ -74,7 +74,7 @@ class NFOV():
         nfov = np.reshape(np.round(AA + BB + CC + DD).astype(np.uint8), [self.height, self.width, 3])
         return nfov
 
-    def toNFOV(self, frame, center_point, FOV=[86, 86], width=1600, height=1600):
+    def toNFOV(self, frame, center_point, FOV=[86.0, 86.0], width=1600, height=1600):
         #FOV: [sight_x_degree, sight_y_degree] = [0~360), [0~180)
         #Center_point: np.array([yaw degree, pitch degree]) = [-180~180), [-90~90)
         self.frame = frame
@@ -101,9 +101,9 @@ if __name__ == '__main__':
     import cv2
     img = cv2.imread('images/360.jpg')
     nfov = NFOV()
-    img = nfov.toNFOV(img, center_point=np.array([0, 0]))
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = nfov.toNFOV(img, center_point=np.array([90.0, 45.0]))
 
     import matplotlib.pyplot as plt
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     plt.imshow(img)
     plt.show()
