@@ -1,36 +1,17 @@
-# Copyright 2017 Nitish Mutha (nitishmutha.com)
-
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-
-#     http://www.apache.org/licenses/LICENSE-2.0
-
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from math import pi
 import numpy as np
 
 class NFOV():
-    def __init__(self, height=400, width=800):
-        self.FOV = [0.45, 0.45]
+    def __init__(self):
         self.PI = pi
         self.PI_2 = pi * 0.5
-        self.PI2 = pi * 2.0
-        self.height = height
-        self.width = width
-        self.screen_points = self._get_screen_img()
+        self.PI2 = pi * 2.0        
 
     def _get_coord_rad(self, isCenterPt, center_point=None):
-        return (center_point * 2 - 1) * np.array([self.PI, self.PI_2]) \
-            if isCenterPt \
-            else \
-            (self.screen_points * 2 - 1) * np.array([self.PI, self.PI_2]) * (
-                np.ones(self.screen_points.shape) * self.FOV)
+        if isCenterPt:
+            return (center_point * 2 - 1) * np.array([self.PI, self.PI_2])
+        else:
+            return (self.screen_points * 2 - 1) * np.array([self.PI, self.PI_2]) * (np.ones(self.screen_points.shape) * self.FOV)
 
     def _get_screen_img(self):
         xx, yy = np.meshgrid(np.linspace(0, 1, self.width), np.linspace(0, 1, self.height))
@@ -59,8 +40,11 @@ class NFOV():
 
         x0 = np.floor(uf).astype(int)  # coord of pixel to bottom left
         y0 = np.floor(vf).astype(int)
-        x2 = np.add(x0, np.ones(uf.shape).astype(int))  # coords of pixel to top right
+        _x2 = np.add(x0, np.ones(uf.shape).astype(int))  # coords of pixel to top right
         y2 = np.add(y0, np.ones(vf.shape).astype(int))
+
+        x2 = np.mod(_x2, self.frame_width)  
+        y2 = np.minimum(y2, self.frame_height-1)
 
         base_y0 = np.multiply(y0, self.frame_width)
         base_y2 = np.multiply(y2, self.frame_width)
@@ -77,8 +61,8 @@ class NFOV():
         C = np.take(flat_img, C_idx, axis=0)
         D = np.take(flat_img, D_idx, axis=0)
 
-        wa = np.multiply(x2 - uf, y2 - vf)
-        wb = np.multiply(x2 - uf, vf - y0)
+        wa = np.multiply(_x2 - uf, y2 - vf)
+        wb = np.multiply(_x2 - uf, vf - y0)
         wc = np.multiply(uf - x0, y2 - vf)
         wd = np.multiply(uf - x0, vf - y0)
 
@@ -88,17 +72,24 @@ class NFOV():
         CC = np.multiply(C, np.array([wc, wc, wc]).T)
         DD = np.multiply(D, np.array([wd, wd, wd]).T)
         nfov = np.reshape(np.round(AA + BB + CC + DD).astype(np.uint8), [self.height, self.width, 3])
-        import matplotlib.pyplot as plt
-        plt.imshow(nfov)
-        plt.show()
         return nfov
 
-    def toNFOV(self, frame, center_point):
+    def toNFOV(self, frame, center_point, FOV=[86, 86], width=1600, height=1600):
+        #FOV: [sight_x_degree, sight_y_degree] = [0~360), [0~180)
+        #Center_point: np.array([yaw degree, pitch degree]) = [-180~180), [-90~90)
         self.frame = frame
         self.frame_height = frame.shape[0]
         self.frame_width = frame.shape[1]
         self.frame_channel = frame.shape[2]
+        if center_point[1]==-90:
+            center_point[1] += np.finfo(np.float32).eps
+        center_point[1] = -center_point[1]
+        center_point = np.array([((center_point[0]+180)%360)/360, ((center_point[1]+90)%180)/180])
+        self.height=height
+        self.width=width
+        self.FOV = [FOV[0]/360.0, FOV[1]/180.0]
 
+        self.screen_points = self._get_screen_img()
         self.cp = self._get_coord_rad(center_point=center_point, isCenterPt=True)
         convertedScreenCoord = self._get_coord_rad(isCenterPt=False)
         spericalCoord = self._calcSphericaltoGnomonic(convertedScreenCoord)
@@ -107,8 +98,12 @@ class NFOV():
 
 # test the class
 if __name__ == '__main__':
-    import imageio as im
-    img = im.imread('images/360.jpg')
+    import cv2
+    img = cv2.imread('images/360.jpg')
     nfov = NFOV()
-    center_point = np.array([0.5, .5])  # camera center point (valid range [0,1])
-    nfov.toNFOV(img, center_point)
+    img = nfov.toNFOV(img, center_point=np.array([0, 0]))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    import matplotlib.pyplot as plt
+    plt.imshow(img)
+    plt.show()
